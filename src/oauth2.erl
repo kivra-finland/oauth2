@@ -365,13 +365,14 @@ verify_access_code(AccessCode, Client, Ctx0) ->
                             -> {ok, {appctx(), response()}} | {error, error()}.
 refresh_access_token(Client, RefreshToken, Scope, Ctx0) ->
     case verify_refresh_token_basic(Client, RefreshToken, Scope, Ctx0) of
-      {ok, {Ctx1, ClientId, ResOwner, VerifiedScope, TTL, _DeviceId}} ->
-          issue_token(#a{ client   = ClientId
-                        , resowner = ResOwner
-                        , scope    = VerifiedScope
-                        , ttl      = TTL
-                        }, Ctx1);
-      {error, _} = E -> E
+        {ok, {Ctx1, ClientId, ResOwner, VerifiedScope, TTL, _DeviceId}} ->
+            ?BACKEND:revoke_refresh_token(RefreshToken, Ctx1),
+            issue_token_and_refresh(#a{ client   = ClientId
+                                      , resowner = ResOwner
+                                      , scope    = VerifiedScope
+                                      , ttl      = TTL
+                                      }, Ctx1);
+        {error, _} = E -> E
     end.
 
 %% @doc Validates a request for a JWT from a refresh token, issuing a new JWT
