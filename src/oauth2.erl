@@ -42,7 +42,7 @@
 -export([verify_access_code/2]).
 -export([verify_access_code/3]).
 -export([verify_jwt/1]).
--export([refresh_access_token/4]).
+-export([refresh_access_token/5]).
 -export([refresh_jwt/4]).
 
 -export_type([token/0]).
@@ -348,12 +348,15 @@ verify_access_code(AccessCode, Client, Ctx0) ->
 %%      a new access token if valid. Use it to implement the following steps of
 %%      RFC 6749:
 %%      - 6. Refreshing an Access Token.
--spec refresh_access_token(client(), token(), scope(), appctx())
+-spec refresh_access_token(client(), token(), scope(), appctx(), boolean())
                             -> {ok, {appctx(), response()}} | {error, error()}.
-refresh_access_token(Client, RefreshToken, Scope, Ctx0) ->
+refresh_access_token(Client, RefreshToken, Scope, Ctx0, RevokeCurrent) ->
     case verify_refresh_token_basic(Client, RefreshToken, Scope, Ctx0) of
         {ok, {Ctx1, ClientId, ResOwner, VerifiedScope, TTL, DeviceId}} ->
-            ?BACKEND:revoke_refresh_token(RefreshToken, Ctx1),
+            case RevokeCurrent of
+                false -> ok;
+                true  -> ?BACKEND:revoke_refresh_token(RefreshToken, Ctx1)
+            end,
             issue_token_and_refresh(#a{ client   = ClientId
                                       , resowner = ResOwner
                                       , scope    = VerifiedScope
