@@ -271,11 +271,11 @@ issue_jwt(#a{ client   = Client
 %%        the client is confidential and a refresh token must be issued.
 -spec issue_token_and_refresh(auth(), binary(), appctx()) -> {ok, {appctx(), response()}}
                                                            | {error, invalid_authorization}.
-issue_token_and_refresh(#a{client = undefined}, _, _Ctx)   ->
+issue_token_and_refresh(#a{client = undefined}, _, _) ->
   {error, invalid_authorization};
-issue_token_and_refresh(#a{resowner = undefined}, _, _Ctx) ->
+issue_token_and_refresh(#a{resowner = undefined}, _, _) ->
   {error, invalid_authorization};
-issue_token_and_refresh( #a{client = Client, resowner = Owner, scope = Scope, ttl = TTL}, DeviceId, Ctx0 ) ->
+issue_token_and_refresh(#a{client = Client, resowner = Owner, scope = Scope, ttl = TTL}, DeviceId, Ctx0) ->
     RTTL         = oauth2_config:expiry_time(refresh_token),
     RefreshCtx   = build_context(Client,seconds_since_epoch(RTTL), Owner, Scope),
     RefreshToken = ?TOKEN:generate(RefreshCtx),
@@ -358,16 +358,15 @@ refresh_access_token(Client, RefreshToken, Scope, Ctx0, RevokeCurrent) ->
     case verify_refresh_token_basic(Client, RefreshToken, Scope, Ctx0) of
         {ok, {Ctx1, ClientId, ResOwner, VerifiedScope, TTL, DeviceId}} ->
             case RevokeCurrent of
-                false -> ok;
-                true  -> ?BACKEND:revoke_refresh_token(RefreshToken, Ctx1)
+                true  -> ?BACKEND:revoke_refresh_token(RefreshToken, Ctx1);
+                false -> ok
             end,
             issue_token_and_refresh(#a{ client   = ClientId
                                       , resowner = ResOwner
                                       , scope    = VerifiedScope
                                       , ttl      = TTL
                                       },
-                                    DeviceId,
-                                    Ctx1);
+                                    DeviceId, Ctx1);
         {error, _} = E -> E
     end.
 
