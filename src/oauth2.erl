@@ -36,7 +36,7 @@
 -export([issue_code/2]).
 -export([issue_token/2]).
 -export([issue_jwt/2]).
--export([issue_token_and_refresh/2]).
+-export([issue_token_and_refresh/3]).
 -export([issue_jwt_and_refresh/3]).
 -export([verify_access_token/2]).
 -export([verify_access_code/2]).
@@ -269,36 +269,25 @@ issue_jwt(#a{ client   = Client
 %%      - 4.3.3. Resource Owner Password Credentials Grant >
 %%        Access Token Response, with the result of authorize_password/6 when
 %%        the client is confidential and a refresh token must be issued.
--spec issue_token_and_refresh(auth(), appctx()) -> {ok, {appctx(), response()}}
-                                                 | {error, invalid_authorization}.
-issue_token_and_refresh(#a{client = undefined}, _Ctx)   ->
+-spec issue_token_and_refresh(auth(), binary(), appctx()) -> {ok, {appctx(), response()}}
+                                                           | {error, invalid_authorization}.
+issue_token_and_refresh(#a{client = undefined}, _, _Ctx)   ->
   {error, invalid_authorization};
-issue_token_and_refresh(#a{resowner = undefined}, _Ctx) ->
+issue_token_and_refresh(#a{resowner = undefined}, _, _Ctx) ->
   {error, invalid_authorization};
-issue_token_and_refresh( #a{client=Client, resowner=Owner, scope=Scope, ttl=TTL}
-                       , Ctx0 ) ->
+issue_token_and_refresh( #a{client = Client, resowner = Owner, scope = Scope, ttl = TTL}, DeviceId, Ctx0 ) ->
     RTTL         = oauth2_config:expiry_time(refresh_token),
-    RefreshCtx   = build_context(Client,seconds_since_epoch(RTTL),Owner,Scope),
+    RefreshCtx   = build_context(Client,seconds_since_epoch(RTTL), Owner, Scope),
     RefreshToken = ?TOKEN:generate(RefreshCtx),
-    AccessCtx    = build_context(Client,seconds_since_epoch(TTL),Owner,Scope,RefreshToken),
+    AccessCtx    = build_context(Client,seconds_since_epoch(TTL), Owner, Scope, RefreshToken),
     AccessToken  = ?TOKEN:generate(AccessCtx),
-    {ok, Ctx1}   = ?BACKEND:associate_access_token( AccessToken
-                                                  , AccessCtx
-                                                  , Ctx0),
-    {ok, Ctx2}   = ?BACKEND:associate_refresh_token( RefreshToken
-                                                   , RefreshCtx
-                                                   , Ctx1 ),
-    {ok, {Ctx2, oauth2_response:new( AccessToken
-                                   , TTL
-                                   , Owner
-                                   , Scope
-                                   , RefreshToken
-                                   , RTTL )}}.
+    {ok, Ctx1}   = ?BACKEND:associate_access_token(AccessToken, AccessCtx, Ctx0),
+    {ok, Ctx2}   = ?BACKEND:associate_refresh_token(RefreshToken, RefreshCtx, DeviceId, Ctx1),
+    {ok, {Ctx2, oauth2_response:new(AccessToken, TTL, Owner, Scope, RefreshToken, RTTL)}}.
 
 %% @doc Issues JWT and refresh token from an authorization.
--spec issue_jwt_and_refresh(auth(), binary(), appctx()) ->
-                              {ok, {appctx(), context(), response()}}
-                            | {error, invalid_authorization}.
+-spec issue_jwt_and_refresh(auth(), binary(), appctx()) -> {ok, {appctx(), context(), response()}}
+                                                         | {error, invalid_authorization}.
 issue_jwt_and_refresh(#a{client = undefined}, _, _)   ->
     {error, invalid_authorization};
 issue_jwt_and_refresh(#a{resowner = undefined}, _, _) ->
@@ -313,8 +302,7 @@ issue_jwt_and_refresh( #a{ client   = Client
     % access_token
     AccessExpiry  = seconds_since_epoch(TTL),
     IssuedAt      = seconds_since_epoch(0),
-    AccessCtx     = build_jwt_context( Issuer, ResOwner, AccessExpiry, IssuedAt
-                                     , Client, Scope),
+    AccessCtx     = build_jwt_context(Issuer, ResOwner, AccessExpiry, IssuedAt, Client, Scope),
     {ok, JWT}     = ?BACKEND:jwt_sign(AccessCtx, Ctx0),
 
     % refresh_token
@@ -322,8 +310,7 @@ issue_jwt_and_refresh( #a{ client   = Client
     RefreshExpiry = seconds_since_epoch(RefreshTTL),
     RefreshCtx    = build_context(Client, RefreshExpiry, ResOwner, Scope),
     RefreshToken  = ?TOKEN:generate(RefreshCtx),
-    {ok, Ctx1}    = ?BACKEND:associate_refresh_token( RefreshToken, RefreshCtx
-                                                    , DeviceId, Ctx0),
+    {ok, Ctx1}    = ?BACKEND:associate_refresh_token(RefreshToken, RefreshCtx, DeviceId, Ctx0),
     {ok, {Ctx1, AccessCtx, oauth2_response:new(JWT, TTL, RefreshToken)}}.
 
 %% @doc Verifies an access code AccessCode, returning its associated
@@ -365,13 +352,15 @@ verify_access_code(AccessCode, Client, Ctx0) ->
                             -> {ok, {appctx(), response()}} | {error, error()}.
 refresh_access_token(Client, RefreshToken, Scope, Ctx0) ->
     case verify_refresh_token_basic(Client, RefreshToken, Scope, Ctx0) of
-        {ok, {Ctx1, ClientId, ResOwner, VerifiedScope, TTL, _DeviceId}} ->
+        {ok, {Ctx1, ClientId, ResOwner, VerifiedScope, TTL, DeviceId}} ->
             ?BACKEND:revoke_refresh_token(RefreshToken, Ctx1),
             issue_token_and_refresh(#a{ client   = ClientId
                                       , resowner = ResOwner
                                       , scope    = VerifiedScope
                                       , ttl      = TTL
-                                      }, Ctx1);
+                                      },
+                                    DeviceId,
+                                    Ctx1);
         {error, _} = E -> E
     end.
 

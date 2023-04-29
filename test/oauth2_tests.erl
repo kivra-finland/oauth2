@@ -279,7 +279,7 @@ verify_access_code_test_() ->
                                          ?CLIENT_URI,
                                          foo_context),
                       {ok, {foo_context, Response2}} =
-                          oauth2:issue_token_and_refresh(Auth2, foo_context),
+                          oauth2:issue_token_and_refresh(Auth2, <<"device_id">>, foo_context),
                       {ok, Token} = oauth2_response:access_token(Response2),
                       ?assertMatch({ok, _}, oauth2:verify_access_token(
                                      Token,
@@ -312,7 +312,7 @@ bad_refresh_token_test_() ->
                                          ?CLIENT_URI,
                                          foo_context),
                       {ok, {foo_context, Res2}} =
-                          oauth2:issue_token_and_refresh(Auth2, foo_context),
+                          oauth2:issue_token_and_refresh(Auth2, <<"device_id">>, foo_context),
                       {ok, RefreshToken} = oauth2_response:refresh_token(Res2),
                       ?assertMatch({error, invalid_client},
                                    oauth2:refresh_access_token(
@@ -440,11 +440,11 @@ issue_token_and_refresh(Response, Context) ->
           Code,
           ?CLIENT_URI,
           Context),
-    {ok, {Context, Res2}} = oauth2:issue_token_and_refresh(Auth2, Context),
+    {ok, {Context, Res2}} = oauth2:issue_token_and_refresh(Auth2, <<"device_id">>, Context),
     {ok, Res2}.
 
 issue_token_and_refresh_with_user_name_and_password(
     Context, UserNameAndPasswordStrategyFun) ->
     {ok, {Context, Auth}}     = UserNameAndPasswordStrategyFun(Context),
-    {ok, {Context, Response}} = oauth2:issue_token_and_refresh(Auth, Context),
+    {ok, {Context, Response}} = oauth2:issue_token_and_refresh(Auth, <<"device_id">>, Context),
     {ok, Response}.
