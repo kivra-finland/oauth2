@@ -279,11 +279,15 @@ issue_token_and_refresh( #a{client = Client, resowner = Owner, scope = Scope, tt
     RTTL         = oauth2_config:expiry_time(refresh_token),
     RefreshCtx   = build_context(Client,seconds_since_epoch(RTTL), Owner, Scope),
     RefreshToken = ?TOKEN:generate(RefreshCtx),
-    AccessCtx    = build_context(Client,seconds_since_epoch(TTL), Owner, Scope, RefreshToken),
+
+    % This is a special prefix for rest_oauth2_token_fi:do_refresh_token to indicate that no JWT should be issued.
+    % This can be removed after the transition period after which the new PIN-based login is mandatory.
+    PrefixedRefreshToken = <<"K-", RefreshToken/binary>>,
+    AccessCtx    = build_context(Client,seconds_since_epoch(TTL), Owner, Scope, PrefixedRefreshToken),
     AccessToken  = ?TOKEN:generate(AccessCtx),
     {ok, Ctx1}   = ?BACKEND:associate_access_token(AccessToken, AccessCtx, Ctx0),
-    {ok, Ctx2}   = ?BACKEND:associate_refresh_token(RefreshToken, RefreshCtx, DeviceId, Ctx1),
-    {ok, {Ctx2, oauth2_response:new(AccessToken, TTL, Owner, Scope, RefreshToken, RTTL)}}.
+    {ok, Ctx2}   = ?BACKEND:associate_refresh_token(PrefixedRefreshToken, RefreshCtx, DeviceId, Ctx1),
+    {ok, {Ctx2, oauth2_response:new(AccessToken, TTL, Owner, Scope, PrefixedRefreshToken, RTTL)}}.
 
 %% @doc Issues JWT and refresh token from an authorization.
 -spec issue_jwt_and_refresh(auth(), binary(), appctx()) -> {ok, {appctx(), context(), response()}}
