@@ -358,8 +358,12 @@ refresh_access_token(Client, RefreshToken, Scope, Ctx0, RevokeCurrent) ->
     case verify_refresh_token_basic(Client, RefreshToken, Scope, Ctx0) of
         {ok, {Ctx1, ClientId, ResOwner, VerifiedScope, TTL, DeviceId}} ->
             case RevokeCurrent of
-                true  -> ?BACKEND:revoke_refresh_token(RefreshToken, Ctx1);
-                false -> ok
+                false -> ok;
+                true  ->
+                    % Why we revoke the token after 10min instead of immediately?
+                    % Sometimes a client might issue two requests in rapid succession. The
+                    % second request will fail if the token is immediately invalidated.
+                    timer:apply_after(600000, ?BACKEND, revoke_refresh_token, [RefreshToken, Ctx1])
             end,
             issue_token_and_refresh(#a{ client   = ClientId
                                       , resowner = ResOwner
